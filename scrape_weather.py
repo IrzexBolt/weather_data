@@ -37,7 +37,7 @@ def scrape_weather_data():
     for row in rows:
         cols = row.find_all("td")
 
-        # Ensure there are at least 3 columns (Station Code, Name, and Max Temp)
+        # Ensure there are at least 4 columns (Station Code, Name, and Max Temp)
         if len(cols) >= 4:
             station_code = cols[1].get_text(strip=True)
             station_name = cols[2].get_text(strip=True)
@@ -48,12 +48,12 @@ def scrape_weather_data():
                 max_temp = "(-)"
 
             # Append the row data
-            data.append([station_name, max_temp])  # Keep only Station Name and Max Temp
+            data.append([station_code, station_name, max_temp])
         else:
             print(f"Skipping malformed row: {row}")
 
     # Create a DataFrame with proper columns
-    df = pd.DataFrame(data, columns=["Station Name", "Max Temperature"])
+    df = pd.DataFrame(data, columns=["Station Code", "Station Name", "Max Temperature"])
     df["Date"] = datetime.now().strftime("%Y-%m-%d")  # Add the current date
     return df
 
@@ -91,46 +91,44 @@ def save_to_google_sheets(df, sheet_name="Weather Data"):
     # Fetch existing data from the Google Sheet
     existing_data = worksheet.get_all_values()
 
-    # Load existing data into a DataFrame if the sheet is not empty
-    if existing_data:
-        headers = existing_data[0]  # First row is assumed to be headers
-        existing_df = pd.DataFrame(existing_data[1:], columns=headers)
-    else:
-        # Initialize an empty DataFrame if the sheet is empty
-        existing_df = pd.DataFrame()
+    # If the sheet is empty, write the static station data
+    if not existing_data:
+        # Write the station codes and names
+        worksheet.append_row(["Station Code", "Station Name"])  # Headers for static data
+        for _, row in df[["Station Code", "Station Name"]].drop_duplicates().iterrows():
+            worksheet.append_row(row.tolist())
+        # Add the first date column and max temperature data
+        worksheet.update_cell(1, 3, df["Date"][0])  # Set the date as the first header
+        for i, max_temp in enumerate(df["Max Temperature"], start=2):
+            worksheet.update_cell(i, 3, max_temp)
+        print(f"Initialized the sheet with station data and date: {df['Date'][0]}")
+        return
 
-    # Check if today's date is already present in the existing data
+    # Load existing data into a DataFrame
+    headers = existing_data[0]  # First row is assumed to be headers
+    existing_df = pd.DataFrame(existing_data[1:], columns=headers)
+
+    # Check if today's date is already present
     today = datetime.now().strftime("%Y-%m-%d")
-    if not existing_df.empty and today in existing_df.columns:
+    if today in existing_df.columns:
         print(f"Data for {today} already exists. Skipping update.")
         return
 
-    # Pivot the new data for horizontal format
-    pivot_df = df.pivot(index="Station Name", columns="Date", values="Max Temperature")
+    # Prepare the new data for today's date
+    df_for_today = df[["Station Code", "Max Temperature"]].set_index("Station Code")
+    df_for_today = df_for_today.rename(columns={"Max Temperature": today})
 
-    # Merge the new pivoted data with the existing data
-    if not existing_df.empty:
-        existing_df = existing_df.set_index("Station Name")  # Ensure Station Name is the index
-        updated_df = pd.concat([existing_df, pivot_df], axis=1)
-    else:
-        updated_df = pivot_df
+    # Merge the new data into the existing data
+    existing_df = existing_df.set_index("Station Code")
+    updated_df = existing_df.join(df_for_today, how="left").reset_index()
 
-    # Reset the index to include Station Name as a column
-    updated_df.reset_index(inplace=True)
-
-    # Clear the worksheet and update it with the new data
+    # Update the worksheet with the new data
     worksheet.clear()
-    worksheet.append_row(updated_df.columns.tolist())  # Add headers
+    worksheet.append_row(updated_df.columns.tolist())  # Write headers
     for row in updated_df.itertuples(index=False):
         worksheet.append_row(row)
 
-    # Share the Google Sheet with your email
-    try:
-        sheet.share('irteza.nayani200@gmail.com', perm_type='user', role='writer')
-    except Exception as e:
-        print(f"Error sharing the sheet: {e}")
-
-    print(f"Data successfully saved to Google Sheet: {sheet_name}")
+    print(f"Added data for date: {today}")
 
 # Main execution
 if __name__ == "__main__":
