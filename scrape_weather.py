@@ -94,6 +94,9 @@ def save_to_google_sheets(df, sheet_name="Weather Data"):
     worksheet.append_row(["Station Code", "Station Name", "Max Temperature", "Date"])  # Headers
     for row in df.values.tolist():
         worksheet.append_row(row)
+    # After creating or opening the sheet
+    # Share the Google Sheet with your email
+    sheet.share('irteza.nayani200@gmail.com', perm_type='user', role='writer')
 
     print(f"Data successfully saved to Google Sheet: {sheet_name}")
 
