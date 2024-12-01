@@ -129,17 +129,14 @@ def save_to_google_sheets(df, sheet_name="Weather Data"):
     # Fetch existing data from the Google Sheet
     existing_data = worksheet.get_all_values()
 
-    # If the sheet is empty, write the static station data
+    # If the sheet is empty, initialize it with Station Code and Station Name
     if not existing_data:
-        # Write the station codes and names
-        worksheet.append_row(["Station Code", "Station Name"])  # Headers for static data
-        for _, row in df[["Station Code", "Station Name"]].drop_duplicates().iterrows():
-            worksheet.append_row(row.tolist())
-        # Add the first date column and max temperature data
-        worksheet.update_cell(1, 3, df["Date"][0])  # Set the date as the first header
-        for i, max_temp in enumerate(df["Max Temperature"], start=2):
-            worksheet.update_cell(i, 3, max_temp)
-        print(f"Initialized the sheet with station data and date: {df['Date'][0]}")
+        print("Initializing the Google Sheet.")
+        # Write static station data and the first date column
+        worksheet.append_row(["Station Code", "Station Name", df["Date"][0]])  # Headers
+        for row in df[["Station Code", "Station Name", "Max Temperature"]].itertuples(index=False):
+            worksheet.append_row(row)
+        print(f"Google Sheet initialized with data for {df['Date'][0]}")
         return
 
     # Load existing data into a DataFrame
