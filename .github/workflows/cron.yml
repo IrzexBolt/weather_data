@@ -1,25 +1,35 @@
-name: Schedule Weather Data Scrape
+name: Weather Data Scraper
 
 on:
-  schedule:
-    - cron: "*/5 * * * *" # Runs every 5 minutes
+  push: # Run the workflow on any push to the repository
+    branches:
+      - main # Specify the branch to watch for pushes (e.g., main or master)
+  workflow_dispatch: # Allows manual triggering if needed
 
 jobs:
-  scrape-data:
+  scrape-and-upload:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      # Checkout the repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
+      # Set up Python
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: "3.9"
 
-      - name: Install Dependencies
+      # Install dependencies
+      - name: Install dependencies
         run: |
-          pip install gspread oauth2client pandas requests beautifulsoup4
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 pandas gspread oauth2client
 
-      - name: Run Script
-        run: python scrape_weather.py
+      # Run the scraper
+      - name: Run scraper
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          python weather_scraper.py
