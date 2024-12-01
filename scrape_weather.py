@@ -48,12 +48,12 @@ def scrape_weather_data():
                 max_temp = "(-)"
 
             # Append the row data
-            data.append([station_code, station_name, max_temp])
+            data.append([station_name, max_temp])  # Keep only Station Name and Max Temp
         else:
             print(f"Skipping malformed row: {row}")
 
     # Create a DataFrame with proper columns
-    df = pd.DataFrame(data, columns=["Station Code", "Station Name", "Max Temperature"])
+    df = pd.DataFrame(data, columns=["Station Name", "Max Temperature"])
     df["Date"] = datetime.now().strftime("%Y-%m-%d")  # Add the current date
     return df
 
@@ -88,15 +88,47 @@ def save_to_google_sheets(df, sheet_name="Weather Data"):
     except gspread.WorksheetNotFound:
         worksheet = sheet.add_worksheet(title="Daily Data", rows="1000", cols="100")
 
-    # Append new data to the worksheet
-    # Clear the existing worksheet to avoid duplicates
+    # Fetch existing data from the Google Sheet
+    existing_data = worksheet.get_all_values()
+
+    # Load existing data into a DataFrame if the sheet is not empty
+    if existing_data:
+        headers = existing_data[0]  # First row is assumed to be headers
+        existing_df = pd.DataFrame(existing_data[1:], columns=headers)
+    else:
+        # Initialize an empty DataFrame if the sheet is empty
+        existing_df = pd.DataFrame()
+
+    # Check if today's date is already present in the existing data
+    today = datetime.now().strftime("%Y-%m-%d")
+    if not existing_df.empty and today in existing_df.columns:
+        print(f"Data for {today} already exists. Skipping update.")
+        return
+
+    # Pivot the new data for horizontal format
+    pivot_df = df.pivot(index="Station Name", columns="Date", values="Max Temperature")
+
+    # Merge the new pivoted data with the existing data
+    if not existing_df.empty:
+        existing_df = existing_df.set_index("Station Name")  # Ensure Station Name is the index
+        updated_df = pd.concat([existing_df, pivot_df], axis=1)
+    else:
+        updated_df = pivot_df
+
+    # Reset the index to include Station Name as a column
+    updated_df.reset_index(inplace=True)
+
+    # Clear the worksheet and update it with the new data
     worksheet.clear()
-    worksheet.append_row(["Station Code", "Station Name", "Max Temperature", "Date"])  # Headers
-    for row in df.values.tolist():
+    worksheet.append_row(updated_df.columns.tolist())  # Add headers
+    for row in updated_df.itertuples(index=False):
         worksheet.append_row(row)
-    # After creating or opening the sheet
-    # Share the Google Sheet with your emails
-    sheet.share('irteza.nayani200@gmail.com', perm_type='user', role='writer')
+
+    # Share the Google Sheet with your email
+    try:
+        sheet.share('irteza.nayani200@gmail.com', perm_type='user', role='writer')
+    except Exception as e:
+        print(f"Error sharing the sheet: {e}")
 
     print(f"Data successfully saved to Google Sheet: {sheet_name}")
 
