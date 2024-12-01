@@ -1,0 +1,25 @@
+name: Schedule Weather Data Scrape
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # Runs every 5 minutes
+
+jobs:
+  scrape-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.9"
+
+      - name: Install Dependencies
+        run: |
+          pip install gspread oauth2client pandas requests beautifulsoup4
+
+      - name: Run Script
+        run: python scrape_weather.py

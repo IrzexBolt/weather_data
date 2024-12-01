@@ -1,9 +1,12 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 from datetime import datetime
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
-# Function to scrape data
+# Function to scrape weather data
 def scrape_weather_data():
     url = "https://metkhi.pmd.gov.pk/Max-Temp.php"
     
@@ -54,31 +57,47 @@ def scrape_weather_data():
     df["Date"] = datetime.now().strftime("%Y-%m-%d")  # Add the current date
     return df
 
-# Save data to a horizontal CSV file
-def save_to_csv_horizontal(df, filename="weather_data.csv"):
+# Save data to Google Sheets
+def save_to_google_sheets(df, sheet_name="Weather Data"):
     if df is None or df.empty:
         print("No data to save.")
         return
 
+    # Define the scope for Google Sheets and Google Drive APIs
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    
+    # Write credentials.json dynamically from environment variable
+    credentials_path = "google-credentials.json"
+    with open(credentials_path, "w") as f:
+        f.write(os.environ["GOOGLE_CREDENTIALS"])  # Fetch from GitHub Secrets
+
+    # Authenticate using the credentials JSON file
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_path, scope)
+    client = gspread.authorize(credentials)
+
     try:
-        # Read existing data if file exists
-        existing_df = pd.read_csv(filename, index_col=0)
-    except FileNotFoundError:
-        print(f"{filename} does not exist. Creating a new file.")
-        existing_df = pd.DataFrame()
+        # Open the Google Sheet by name
+        sheet = client.open(sheet_name)
+    except gspread.SpreadsheetNotFound:
+        # If the sheet doesn't exist, create a new one
+        sheet = client.create(sheet_name)
 
-    # Reshape new data to align stations with dates
-    new_data = df.pivot(index="Station Name", columns="Date", values="Max Temperature")
+    # Select or create a worksheet
+    try:
+        worksheet = sheet.worksheet("Daily Data")
+    except gspread.WorksheetNotFound:
+        worksheet = sheet.add_worksheet(title="Daily Data", rows="1000", cols="100")
 
-    # Merge new data into existing data
-    combined_df = pd.concat([existing_df, new_data], axis=1)
-    combined_df = combined_df.loc[~combined_df.index.duplicated(keep="first")]
+    # Append new data to the worksheet
+    # Clear the existing worksheet to avoid duplicates
+    worksheet.clear()
+    worksheet.append_row(["Station Code", "Station Name", "Max Temperature", "Date"])  # Headers
+    for row in df.values.tolist():
+        worksheet.append_row(row)
 
-    # Save the updated data
-    combined_df.to_csv(filename, encoding="utf-8")
-    print(f"Data successfully saved to {filename}")
+    print(f"Data successfully saved to Google Sheet: {sheet_name}")
 
 # Main execution
 if __name__ == "__main__":
     weather_data = scrape_weather_data()
-    save_to_csv_horizontal(weather_data)
+    save_to_google_sheets(weather_data)
