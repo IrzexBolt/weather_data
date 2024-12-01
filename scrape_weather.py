@@ -157,7 +157,7 @@ def save_to_google_sheets(df, sheet_name="Weather Data"):
     existing_df = existing_df.set_index("Station Code")
     updated_df = existing_df.join(df_for_today, how="left").reset_index()
 
-    # Update the worksheet with the new data
+    # Write the updated data back to the Google Sheet
     worksheet.clear()
     worksheet.append_row(updated_df.columns.tolist())  # Write headers
     for row in updated_df.itertuples(index=False):
